@@ -111,9 +111,6 @@ def main(text_file_path):
         temp_files.append(temp_file_path)
 
     # 結合された音声ファイルを保存
-    # combined_file_path = Path(text_file_path).with_name(
-    #     Path(text_file_path).stem + ".mp3"
-    # )
     combined_file_path = Path("mp3") / (Path(text_file_path).stem + ".mp3")
 
     combined.export(combined_file_path, format="mp3")
