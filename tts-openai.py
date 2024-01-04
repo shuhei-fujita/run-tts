@@ -97,7 +97,7 @@ def main(text_file_path):
     for i, part_text in enumerate(split_texts, start=1):
         speech = generate_speech(client, part_text)
         temp_file_path = Path(text_file_path).with_name(
-            Path("mp3") / Path(text_file_path).stem + f"_temp_{i}.mp3"
+            Path(text_file_path).stem + f"_temp_{i}.mp3"
         )
         with open(temp_file_path, "wb") as file:
             file.write(speech.content)
