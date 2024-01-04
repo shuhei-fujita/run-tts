@@ -6,8 +6,22 @@ import sys
 from pydub import AudioSegment
 import subprocess
 
-MAX_LENGTH = 4096
+"""
+OpenAIのAPIではMAX_LENGTHが4096が上限なのですが、テキストの処理に限界でネットワークが途切れる恐れがある。
+なので、実験的にMAX_LENGTHを下げて、1つあたりのTTS処理をさらに細かく処理するアプローチをとる。
 
+メリット：
+- より堅牢なエラーハンドリング: 小さなテキストブロックでエラーが発生した場合、再処理が必要なデータ量が少なくなります。これにより、APIコールの効率が向上します。
+- API制限への対応: OpenAIのAPIには特定の制限があります（例えば、テキストの最大長）。より小さいテキストブロックを使用することで、これらの制限をより簡単に遵守することができます。
+- メモリ使用量の削減: 同時に処理されるデータ量が少なくなるため、スクリプトのメモリ使用量が削減される可能性があります。
+
+デメリット：
+- 処理時間の増加: より多くの小さいテキストブロックを処理するため、全体の処理時間が増加する可能性があります。
+- 音声の自然さへの影響: テキストを細かく分割すると、音声が不自然に聞こえる場合があります。特に、文や段落の途中で分割されると、音声の流れが断ち切られる可能性があります。
+"""
+
+MAX_LENGTH = 2048  # テキストの最大長
+MAX_RETRIES = 3  # 最大再試行回数
 
 def sync_s3():
     command = [
@@ -46,10 +60,19 @@ def split_text(text, max_length):
 
 
 def generate_speech(client, text, model_name="tts-1", voice="nova"):
-    response = client.audio.speech.create(
-        model=model_name, voice=voice, input=text.strip()
-    )
-    return response
+    retry_count = 0  # 再試行回数を初期化
+    while retry_count < MAX_RETRIES:
+        try:
+            response = client.audio.speech.create(
+                model=model_name, voice=voice, input=text.strip()
+            )
+            return response
+        except Exception as e:
+            print(f"Error in API call: {e}")
+            print(f"Retrying ({retry_count+1}/{MAX_RETRIES})...")
+            retry_count += 1
+    print("Max retries reached. Unable to generate speech.")
+    return None  # エラー時はNoneを返す
 
 
 def main(text_file_path):
@@ -74,7 +97,7 @@ def main(text_file_path):
     for i, part_text in enumerate(split_texts, start=1):
         speech = generate_speech(client, part_text)
         temp_file_path = Path(text_file_path).with_name(
-            Path(text_file_path).stem + f"_temp_{i}.mp3"
+            Path("mp3") / Path(text_file_path).stem + f"_temp_{i}.mp3"
         )
         with open(temp_file_path, "wb") as file:
             file.write(speech.content)
