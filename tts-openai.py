@@ -58,6 +58,13 @@ def split_text(text, max_length):
         else:
             current_text += " " + word
     split_texts.append(current_text)
+
+    for i, part_text in enumerate(split_texts):
+        temp_file_path = Path(text_file_path).with_name(
+            Path(text_file_path).stem + f"_temp_{i}.mp3"
+        )
+        print(f"Processing: {temp_file_path}")
+
     return split_texts
 
 def generate_speech(client, text, model_name="tts-1", voice="nova"):
@@ -79,18 +86,16 @@ def generate_speech(client, text, model_name="tts-1", voice="nova"):
 def process_text_block(
     client, text, model_name, voice, temp_file_path, block_number, progress_bar, lock
 ):
-    print(f"Processing text blocks [{temp_file_path}]")
     try:
-        response = client.audio.speech.create(
-            model=model_name, voice=voice, input=text.strip()
-        )
-        with open(temp_file_path, "wb") as file:
-            file.write(response.content)
+        response = generate_speech(client, text, model_name, voice)
+        if response:
+            with open(temp_file_path, "wb") as file:
+                file.write(response.content)
     except Exception as e:
         print(f"Error processing block {block_number}: {e}")
     finally:
         with lock:
-            progress_bar.update(1)  # 進行状況バーを更新
+            progress_bar.update(1)
 
 
 def main(text_file_path):
@@ -104,7 +109,7 @@ def main(text_file_path):
 
     # テキストを分割
     split_texts = split_text(text, MAX_LENGTH)
-    progress_bar = tqdm(total=len(split_texts), desc="Processing text blocks")
+    progress_bar = tqdm(total=len(split_texts), desc="Processing")
     lock = threading.Lock()  # ロックの作成
 
     # スレッドのリスト
@@ -157,7 +162,7 @@ def main(text_file_path):
         os.remove(temp_file)
 
     # S3にアップロード
-    sync_s3()
+    # sync_s3()
 
 # スクリプトの実行
 if __name__ == "__main__":
