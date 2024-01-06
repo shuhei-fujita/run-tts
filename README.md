@@ -1,15 +1,18 @@
 # TextToSpeach:TTS
 
-- OpenAI: speach
-- AWS: AWS Polly
-- Google: gTTS (Google Text-to-Speech):
+## 参考文献
 
-## Tutorial
+OpenAI: speach
+- https://platform.openai.com/docs/guides/speech-to-text
 
-https://huggingface.co/microsoft/speecht5_tts
+AWS: AWS Polly
+- https://aws.amazon.com/jp/polly/
 
+Google: gTTS (Google Text-to-Speech)
+- https://cloud.google.com/text-to-speech?hl=ja
 
-## 先行事例
+SpeechT5
+- https://huggingface.co/microsoft/speecht5_tts
 
 LISTEN
 - https://listen.style/p/listennews/dkcjirkq
