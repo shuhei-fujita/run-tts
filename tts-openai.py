@@ -1,4 +1,5 @@
 import os
+import io
 import sys
 import subprocess
 import threading
@@ -10,6 +11,7 @@ from dotenv import load_dotenv
 
 MAX_LENGTH = 2048  # テキストの最大長
 MAX_RETRIES = 3  # 最大再試行回数
+
 
 def sync_s3():
     print("Starting S3 sync...")
@@ -29,53 +31,52 @@ def sync_s3():
         print(f"S3 sync failed with error: {result.stderr}")
 
 
-def load_text(file_path):
+def read_file(file_path):
     with open(file_path, "r", encoding="utf-8") as file:
         return file.read()
 
-def split_text(text, max_length):
+
+def split_into_chunks(text, max_length):
     words = text.split()
-    split_texts = []
-    current_text = ""
+    chunks = []
+    current_chunk = ""
     for word in words:
-        if len(current_text) + len(word) + 1 > max_length:
-            split_texts.append(current_text)
-            current_text = word
+        if len(current_chunk) + len(word) + 1 > max_length:
+            chunks.append(current_chunk)
+            current_chunk = word
         else:
-            current_text += " " + word
-    split_texts.append(current_text)
+            current_chunk += " " + word
+    chunks.append(current_chunk)
+    return chunks
 
-    for i, part_text in enumerate(split_texts):
-        temp_file_path = Path(text_file_path).with_name(
-            Path(text_file_path).stem + f"_temp_{i}.mp3"
-        )
-        print(f"Processing: {temp_file_path}")
 
-    return split_texts
+def create_audio_segment(response):
+    return AudioSegment.from_file(io.BytesIO(response.content), format="mp3")
 
-def generate_speech(client, text, model_name="tts-1", voice="nova"):
+
+def generate_speech(client, text, model_name, voice):
     retry_count = 0
     while retry_count < MAX_RETRIES:
         try:
-            response = client.audio.speech.create(
+            return client.audio.speech.create(
                 model=model_name, voice=voice, input=text.strip()
             )
-            return response
         except Exception as e:
-            print(f"Error in API call: {e}")
-            print(f"Retrying ({retry_count+1}/{MAX_RETRIES})...")
+            print(
+                f"Error in API call: {e}. Retrying ({retry_count+1}/{MAX_RETRIES})..."
+            )
             retry_count += 1
     return None
 
 
 def process_text_block(
-    client, text, model_name, voice, temp_file_path, block_number, progress_bar, lock
+    client, text, model_name, voice, block_number, results, progress_bar, lock
 ):
     try:
         response = generate_speech(client, text, model_name, voice)
         if response:
-            with open(temp_file_path, "wb") as file:
-                file.write(response.content)
+            with lock:
+                results[block_number] = create_audio_segment(response)
     except Exception as e:
         print(f"Error processing block {block_number}: {e}")
     finally:
@@ -83,59 +84,48 @@ def process_text_block(
             progress_bar.update(1)
 
 
+def combine_audio_segments(results):
+    combined_audio = AudioSegment.empty()
+    for segment in results:
+        if segment:
+            combined_audio += segment
+    return combined_audio
+
+
 def main(text_file_path):
     load_dotenv()
     openai_api_key = os.getenv("OPENAI_API_KEY")
     client = OpenAI(api_key=openai_api_key)
 
-    text = load_text(text_file_path)
-    split_texts = split_text(text, MAX_LENGTH)
+    text = read_file(text_file_path)
+    chunks = split_into_chunks(text, MAX_LENGTH)
 
-    progress_bar = tqdm(total=len(split_texts), desc="Processing")
+    progress_bar = tqdm(total=len(chunks), desc="Processing")
     lock = threading.Lock()
-
+    results = [None] * len(chunks)
     threads = []
 
-    for i, part_text in enumerate(split_texts, start=1):
-        temp_file_path = Path(text_file_path).with_name(
-            f"{Path(text_file_path).stem}_temp_{i}.mp3"
-        )
+    for i, chunk in enumerate(chunks):
         thread = threading.Thread(
             target=process_text_block,
-            args=(
-                client,
-                part_text,
-                "tts-1",
-                "nova",
-                temp_file_path,
-                i,
-                progress_bar,
-                lock,
-            ),
+            args=(client, chunk, "tts-1", "nova", i, results, progress_bar, lock),
         )
         thread.start()
         threads.append(thread)
 
     for thread in threads:
         thread.join()
-
     progress_bar.close()
 
-    combined = AudioSegment.empty()
-    for i, _ in enumerate(split_texts, start=1):
-        temp_file_path = Path(text_file_path).with_name(
-            f"{Path(text_file_path).stem}_temp_{i}.mp3"
-        )
-        combined += AudioSegment.from_mp3(temp_file_path)
-        os.remove(temp_file_path)
-
-    combined.export(Path("mp3") / f"{Path(text_file_path).stem}.mp3", format="mp3")
+    combined_audio = combine_audio_segments(results)
+    combined_audio.export(
+        Path("mp3") / f"{Path(text_file_path).stem}.mp3", format="mp3"
+    )
     print(
         f"Combined speech saved as {Path('mp3') / f'{Path(text_file_path).stem}.mp3'}"
     )
 
     sync_s3()
-
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
