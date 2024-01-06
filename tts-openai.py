@@ -8,7 +8,7 @@ from tqdm import tqdm
 from openai import OpenAI
 from dotenv import load_dotenv
 
-MAX_LENGTH = 127  # テキストの最大長
+MAX_LENGTH = 2048  # テキストの最大長
 MAX_RETRIES = 3  # 最大再試行回数
 
 def sync_s3():
