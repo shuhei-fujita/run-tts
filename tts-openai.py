@@ -6,6 +6,8 @@ import sys
 from pydub import AudioSegment
 import subprocess
 import threading
+from tqdm import tqdm
+import time
 
 """
 OpenAIのAPIではMAX_LENGTHが4096が上限なのですが、テキストの処理に限界でネットワークが途切れる恐れがある。
@@ -21,10 +23,11 @@ OpenAIのAPIではMAX_LENGTHが4096が上限なのですが、テキストの処
 - 音声の自然さへの影響: テキストを細かく分割すると、音声が不自然に聞こえる場合があります。特に、文や段落の途中で分割されると、音声の流れが断ち切られる可能性があります。
 """
 
-MAX_LENGTH = 4096  # テキストの最大長
+MAX_LENGTH = 127  # テキストの最大長
 MAX_RETRIES = 3  # 最大再試行回数
 
 def sync_s3():
+    print("Starting S3 sync...")
     command = [
         "aws",
         "s3",
@@ -36,9 +39,9 @@ def sync_s3():
     ]
     result = subprocess.run(command, capture_output=True, text=True)
     if result.returncode == 0:
-        print("Sync completed successfully.")
+        print("S3 sync completed successfully.")
     else:
-        print(f"Sync failed with error: {result.stderr}")
+        print(f"S3 sync failed with error: {result.stderr}")
 
 def load_text(file_path):
     with open(file_path, "r", encoding="utf-8") as file:
@@ -73,16 +76,21 @@ def generate_speech(client, text, model_name="tts-1", voice="nova"):
     return None  # エラー時はNoneを返す
 
 
-def process_text_block(client, text, model_name, voice, temp_file_path):
+def process_text_block(
+    client, text, model_name, voice, temp_file_path, block_number, progress_bar, lock
+):
+    print(f"Processing text blocks [{temp_file_path}]")
     try:
         response = client.audio.speech.create(
             model=model_name, voice=voice, input=text.strip()
         )
         with open(temp_file_path, "wb") as file:
             file.write(response.content)
-        print(f"Generated speech part: {temp_file_path}")
     except Exception as e:
-        print(f"Error in API call: {e}")
+        print(f"Error processing block {block_number}: {e}")
+    finally:
+        with lock:
+            progress_bar.update(1)  # 進行状況バーを更新
 
 
 def main(text_file_path):
@@ -91,15 +99,13 @@ def main(text_file_path):
     openai_api_key = os.getenv("OPENAI_API_KEY")
     client = OpenAI(api_key=openai_api_key)
 
-    print("loaded environment variables")
-
     # テキストファイルの読み込み
     text = load_text(text_file_path)
-    print("loaded text file")
 
     # テキストを分割
     split_texts = split_text(text, MAX_LENGTH)
-    print("split text")
+    progress_bar = tqdm(total=len(split_texts), desc="Processing text blocks")
+    lock = threading.Lock()  # ロックの作成
 
     # スレッドのリスト
     threads = []
@@ -111,14 +117,25 @@ def main(text_file_path):
         )
         thread = threading.Thread(
             target=process_text_block,
-            args=(client, part_text, "tts-1", "nova", temp_file_path),
+            args=(
+                client,
+                part_text,
+                "tts-1",
+                "nova",
+                temp_file_path,
+                i,
+                progress_bar,
+                lock,
+            ),
         )
-        threads.append(thread)
         thread.start()
+        threads.append(thread)
 
     # すべてのスレッドの完了を待つ
     for thread in threads:
         thread.join()
+
+    progress_bar.close()
 
     # 結合された音声ファイルを保存
     combined = AudioSegment.empty()
@@ -138,12 +155,9 @@ def main(text_file_path):
     # 一時ファイルの削除
     for temp_file in temp_files:
         os.remove(temp_file)
-        print(f"Removed temporary file: {temp_file}")
 
     # S3にアップロード
-    print("Uploading to S3...")
     sync_s3()
-    print("Upload S3 completed")
 
 # スクリプトの実行
 if __name__ == "__main__":
