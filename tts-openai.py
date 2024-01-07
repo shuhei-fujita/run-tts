@@ -8,8 +8,9 @@ from pydub import AudioSegment
 from tqdm import tqdm
 from openai import OpenAI
 from dotenv import load_dotenv
+import argparse
 
-MAX_LENGTH = 2048  # テキストの最大長
+MAX_LENGTH = 1024  # テキストの最大長
 MAX_RETRIES = 3  # 最大再試行回数
 
 
@@ -92,7 +93,7 @@ def combine_audio_segments(results):
     return combined_audio
 
 
-def main(text_file_path):
+def main(text_file_path, model):
     load_dotenv()
     openai_api_key = os.getenv("OPENAI_API_KEY")
     client = OpenAI(api_key=openai_api_key)
@@ -108,7 +109,7 @@ def main(text_file_path):
     for i, chunk in enumerate(chunks):
         thread = threading.Thread(
             target=process_text_block,
-            args=(client, chunk, "tts-1", "nova", i, results, progress_bar, lock),
+            args=(client, chunk, model, "nova", i, results, progress_bar, lock),
         )
         thread.start()
         threads.append(thread)
@@ -127,10 +128,20 @@ def main(text_file_path):
 
     sync_s3()
 
-if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage: python tts-openai.py <text_file_path>")
-        sys.exit(1)
 
-    text_file_path = sys.argv[1]
-    main(sys.argv[1])
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Text-to-Speech script using OpenAI's API.",
+        epilog="Usage example: python tts-openai.py example.txt --model tts-1-hd",
+    )
+    parser.add_argument("text_file_path", help="Path to the text file.")
+    parser.add_argument(
+        "--model",
+        default="tts-1",
+        choices=["tts-1", "tts-1-hd"],
+        help="Model to use for text-to-speech. Choices are tts-1 or tts-1-hd. Default is tts-1.",
+    )
+
+    args = parser.parse_args()
+
+    main(args.text_file_path, args.model)
