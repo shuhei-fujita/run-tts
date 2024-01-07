@@ -42,3 +42,20 @@ python -m venv .venv && source .venv/bin/activate && pip install -r requirements
 ```bash
 python tts-openai.py text/sample-text-jp.txt
 ```
+
+```bash
+$ python tts-openai.py -h                                                                                                    254 ↵
+usage: tts-openai.py [-h] [--model {tts-1,tts-1-hd}] text_file_path
+
+Text-to-Speech script using OpenAI's API.
+
+positional arguments:
+  text_file_path        Path to the text file.
+
+options:
+  -h, --help            show this help message and exit
+  --model {tts-1,tts-1-hd}
+                        Model to use for text-to-speech. Choices are tts-1 or tts-1-hd. Default is tts-1.
+
+Usage example: python tts-openai.py example.txt --model tts-1-hd
+```
