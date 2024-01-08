@@ -59,3 +59,8 @@ options:
 
 Usage example: python tts-openai.py example.txt --model tts-1-hd
 ```
+
+
+```bash
+ffprobe mp3 mp3/sample-text-jp.mp3
+```
