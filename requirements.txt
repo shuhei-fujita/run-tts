@@ -3,4 +3,4 @@ pydub
 python-dotenv==1.0.0
 boto3
 tqdm
-eyed3
+mutagen
