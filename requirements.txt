@@ -4,3 +4,5 @@ python-dotenv==1.0.0
 boto3
 tqdm
 mutagen
+ebooklib
+bs4

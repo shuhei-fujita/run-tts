@@ -234,8 +234,6 @@ def main(text_file_path, model, audio_format):
 
     # チャプター情報を抽出
     chapters = extract_chapters(text, mp3_output_file)
-    print(f"Extracted {len(chapters)} chapters.")
-    print(chapters)
 
     # メタデータの追加
     if audio_format == "mp3":
