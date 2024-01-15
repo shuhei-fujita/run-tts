@@ -13,8 +13,10 @@ from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, TIT2, CHAP, USLT, COMM, CHAP
 import math
 import re
+from ebooklib import epub
+from bs4 import BeautifulSoup
 
-MAX_LENGTH = 1024  # テキストの最大長
+MAX_LENGTH = 4096  # テキストの最大長
 MAX_RETRIES = 3  # 最大再試行回数
 
 
@@ -120,9 +122,32 @@ def sync_s3():
         print(f"S3 sync failed with error: {result.stderr}")
 
 
+def extract_text_from_epub(epub_file_path):
+    # .epubファイルを開く
+    book = epub.read_epub(epub_file_path)
+
+    # テキストを格納する変数を初期化
+    text = ""
+
+    # .epubファイル内の各ページを処理
+    for item in book.items:
+        if item.get_type() == 9:  # 9はHTMLドキュメントを示します
+            # BeautifulSoupを使用してHTMLをパース
+            soup = BeautifulSoup(item.content, "html.parser")
+            # ページ内のテキストを抽出
+            page_text = soup.get_text()
+            # ページのテキストを全体のテキストに追加
+            text += page_text + "\n"
+
+    return text
+
+
 def read_file(file_path):
-    with open(file_path, "r", encoding="utf-8") as file:
-        return file.read()
+    with open(file_path, "rb") as file:
+        # バイナリモードでファイルを読み取り、UTF-8エンコーディングでデコード
+        text = file.read().decode("utf-8")
+
+    return text
 
 
 def split_into_chunks(text, max_length):
@@ -205,7 +230,22 @@ def main(text_file_path, model, audio_format):
     openai_api_key = os.getenv("OPENAI_API_KEY")
     client = OpenAI(api_key=openai_api_key)
 
-    text = read_file(text_file_path)
+    # text = extract_text_from_epub(
+    #     "ebook/oreilly_designing_data_intensive_applications.epub"
+    # )
+    # print(text)
+
+    if text_file_path.endswith(".epub"):
+        # .epubファイルの場合
+        text = extract_text_from_epub(text_file_path)
+    elif text_file_path.endswith(".txt"):
+        # .txtファイルの場合
+        text = read_file(text_file_path)
+    else:
+        print("Unsupported file format. Please provide a .txt or .epub file.")
+        return
+
+    # text = read_file(text_file_path)
     chunks = split_into_chunks(text, MAX_LENGTH)
 
     progress_bar = tqdm(total=len(chunks), desc="Processing")

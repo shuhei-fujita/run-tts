@@ -6,3 +6,5 @@ tqdm
 mutagen
 ebooklib
 bs4
+selenium
+webdriver-manager

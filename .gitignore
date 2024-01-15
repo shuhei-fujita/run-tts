@@ -1,3 +1,8 @@
 .env
 .venv
 report*
+oreilly*
+*.log
+run-selenium.py
+run-tts.sh
+create_files.sh
