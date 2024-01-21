@@ -230,11 +230,6 @@ def main(text_file_path, model, audio_format):
     openai_api_key = os.getenv("OPENAI_API_KEY")
     client = OpenAI(api_key=openai_api_key)
 
-    # text = extract_text_from_epub(
-    #     "ebook/oreilly_designing_data_intensive_applications.epub"
-    # )
-    # print(text)
-
     if text_file_path.endswith(".epub"):
         # .epubファイルの場合
         text = extract_text_from_epub(text_file_path)

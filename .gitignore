@@ -6,3 +6,4 @@ oreilly*
 run-selenium.py
 run-tts.sh
 create_files.sh
+*.mp4
