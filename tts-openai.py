@@ -113,7 +113,7 @@ def sync_s3():
         "mp3",
         "s3://play-audio-ios",
         "--profile",
-        "private-fujita",
+        "fujita",
     ]
     result = subprocess.run(command, capture_output=True, text=True)
     if result.returncode == 0:
@@ -278,7 +278,7 @@ def main(text_file_path, model, audio_format):
     if audio_format == "aac":
         convert_mp3_to_aac(mp3_output_file)
 
-    # sync_s3()
+    sync_s3()
 
 
 if __name__ == "__main__":
